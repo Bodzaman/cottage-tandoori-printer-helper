@@ -1,0 +1,158 @@
+name: Build Double-Clickable Epson Helper Executables
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: node18-linux-x64
+            output: qsai-printer-helper-linux
+            platform: linux
+          - os: windows-latest
+            target: node18-win-x64
+            output: qsai-printer-helper-win.exe
+            platform: windows
+          - os: macos-latest
+            target: node18-macos-x64
+            output: qsai-printer-helper-macos
+            platform: macos
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies with retry
+      run: |
+        for i in {1..3}; do
+          echo "Attempt $i to install dependencies..."
+          npm ci && break || sleep 30
+        done
+      shell: bash
+        
+    - name: Build executable with proper permissions
+      run: |
+        echo "Building for ${{ matrix.platform }}..."
+        npx pkg server.js --targets ${{ matrix.target }} --out-path dist
+        
+        # Rename to proper filename
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          mv dist/server.exe dist/${{ matrix.output }}
+        else
+          mv dist/server dist/${{ matrix.output }}
+          # CRITICAL: Set executable permissions for Unix-like systems
+          chmod +x dist/${{ matrix.output }}
+          echo "Set executable permissions for ${{ matrix.output }}"
+        fi
+        
+        # Verify the file was created
+        ls -la dist/
+        file dist/${{ matrix.output }} || true
+      shell: bash
+      
+    - name: Test executable permissions (non-Windows)
+      if: matrix.platform != 'windows'
+      run: |
+        echo "Testing executable permissions..."
+        ls -la dist/${{ matrix.output }}
+        # Check if file has execute bit set
+        if test -x dist/${{ matrix.output }}; then
+          echo "Executable permissions set correctly"
+        else
+          echo "Missing executable permissions"
+          exit 1
+        fi
+      shell: bash
+      
+    - name: Upload artifacts with proper metadata
+      uses: actions/upload-artifact@v4
+      with:
+        name: executable-${{ matrix.platform }}
+        path: dist/${{ matrix.output }}
+        retention-days: 90
+        
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Verify and set permissions for downloaded artifacts
+      run: |
+        echo "Downloaded artifacts:"
+        find ./artifacts -type f -exec ls -la {} \;
+        
+        # Ensure Unix executables maintain permissions
+        find ./artifacts -name "*linux*" -o -name "*macos*" | while read file; do
+          if [ -f "$file" ]; then
+            echo "Setting executable permissions for $file"
+            chmod +x "$file"
+            ls -la "$file"
+          fi
+        done
+
+    - name: Generate version tag
+      id: version
+      run: |
+        VERSION="v$(date +%Y%m%d-%H%M%S)-build${{ github.run_number }}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Generated version: $VERSION"
+        
+    - name: Create release with enhanced metadata
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: "QSAI Epson Helper ${{ steps.version.outputs.version }}"
+        body: |
+          ## Double-Clickable Epson Printer Helper
+          
+          **Ready to use - Just download and double-click!**
+          
+          ### Downloads:
+          - **Windows**: `qsai-printer-helper-win.exe` (Double-click to run)
+          - **macOS**: `qsai-printer-helper-macos` (Double-click to run)
+          - **Linux**: `qsai-printer-helper-linux` (Double-click to run)
+          
+          ### Quick Start:
+          1. Download the file for your operating system
+          2. Double-click the downloaded file
+          3. Server will start on `localhost:3001`
+          4. Printers will be auto-discovered
+          
+          ### Technical Details:
+          - Supports Epson TM-T20III & TM-T88V
+          - Auto-connects to Cottage Tandoori Supabase
+          - Zero installation required
+          - Professional restaurant POS integration
+          
+          **Build**: #${{ github.run_number }} | **Commit**: ${{ github.sha }}
+        files: |
+          ./artifacts/executable-windows/qsai-printer-helper-win.exe
+          ./artifacts/executable-macos/qsai-printer-helper-macos
+          ./artifacts/executable-linux/qsai-printer-helper-linux
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
