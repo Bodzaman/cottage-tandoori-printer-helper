@@ -1,9 +1,7 @@
-name: Build Multi-Format Printer Helper
+name: Build Executables
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -11,138 +9,108 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: node18-linux-x64
-            output: qsai-printer-helper-linux
-            platform: linux
+            output: printer-helper-linux
           - os: windows-latest
             target: node18-win-x64
-            output: qsai-printer-helper-win.exe
-            platform: windows
-          - os: macos-14
+            output: printer-helper-win.exe
+          - os: macos-13
             target: node18-macos-x64
-            output: qsai-printer-helper-macos
-            platform: macos
+            output: printer-helper-macos
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Setup Node.js 18
-      uses: actions/setup-node@v4
+    - uses: actions/setup-node@v4
       with:
-        node-version: '18.20.4'
-        registry-url: 'https://registry.npmjs.org'
+        node-version: '18'
 
-    - name: Clear npm cache
-      run: npm cache clean --force
+    - run: npm install
 
-    - name: Install dependencies
-      run: |
-        npm install --no-package-lock --legacy-peer-deps
-        npm install -g pkg@5.8.1
+    - run: npm install -g pkg@5.8.1
 
-    - name: Build executable
-      run: |
+    - run: |
         mkdir -p dist
         pkg server.js --targets ${{ matrix.target }} --output dist/${{ matrix.output }}
 
-    - name: Set executable permissions (Unix)
-      if: matrix.platform != 'windows'
+    - name: Set permissions (Unix)
+      if: matrix.os != 'windows-latest'
       run: chmod +x dist/${{ matrix.output }}
 
-    - name: Create macOS multi-format (macOS only)
-      if: matrix.platform == 'macos'
+    - name: Create macOS extras (macOS only)
+      if: matrix.os == 'macos-13'
       run: |
         # Create .app bundle
-        mkdir -p "QSAIPrinterHelper.app/Contents/MacOS"
-        mkdir -p "QSAIPrinterHelper.app/Contents/Resources"
+        mkdir -p "PrinterHelper.app/Contents/MacOS"
+        cp dist/${{ matrix.output }} "PrinterHelper.app/Contents/MacOS/printer-helper"
+        chmod +x "PrinterHelper.app/Contents/MacOS/printer-helper"
 
-        # Copy executable
-        cp dist/${{ matrix.output }} "QSAIPrinterHelper.app/Contents/MacOS/qsai-printer-helper"
-        chmod +x "QSAIPrinterHelper.app/Contents/MacOS/qsai-printer-helper"
-
-        # Create Info.plist
-        cat > "QSAIPrinterHelper.app/Contents/Info.plist" << EOF
+        cat > "PrinterHelper.app/Contents/Info.plist" << EOF
         <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
         <dict>
             <key>CFBundleExecutable</key>
-            <string>qsai-printer-helper</string>
+            <string>printer-helper</string>
             <key>CFBundleIdentifier</key>
             <string>com.cottagetandoori.printerhelper</string>
             <key>CFBundleName</key>
-            <string>QSAI Printer Helper</string>
+            <string>Printer Helper</string>
             <key>CFBundlePackageType</key>
             <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0.0</string>
         </dict>
         </plist>
         EOF
 
         # Create .command script
-        cat > dist/qsai-printer-helper.command << 'EOF'
+        cat > dist/printer-helper.command << 'SCRIPT'
         #!/bin/bash
-        echo "🖨️ Starting QSAI Printer Helper..."
-        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-        "$SCRIPT_DIR/${{ matrix.output }}"
-        echo "Press any key to close..."
-        read -n 1
-        EOF
-        chmod +x dist/qsai-printer-helper.command
+        echo "Starting Printer Helper..."
+        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        "$DIR/${{ matrix.output }}"
+        echo "Press Enter to close..."
+        read
+        SCRIPT
+        chmod +x dist/printer-helper.command
 
-        # Create ZIP of .app bundle
-        zip -r dist/qsai-printer-helper-macos-app.zip "QSAIPrinterHelper.app"
+        # ZIP the .app
+        zip -r dist/printer-helper-macos-app.zip "PrinterHelper.app"
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.platform }}-executables
-        path: |
-          dist/${{ matrix.output }}
-          dist/qsai-printer-helper.command
-          dist/qsai-printer-helper-macos-app.zip
-        retention-days: 30
+        name: ${{ matrix.os }}-builds
+        path: dist/
 
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v4
 
-    - name: Create or update release
-      uses: softprops/action-gh-release@v1
+    - uses: softprops/action-gh-release@v1
       with:
         tag_name: v1.0.${{ github.run_number }}
-        name: "Multi-Format Helper v1.0.${{ github.run_number }}"
+        name: "Printer Helper v1.0.${{ github.run_number }}"
         files: |
-          linux-executables/qsai-printer-helper-linux
-          windows-executables/qsai-printer-helper-win.exe
-          macos-executables/qsai-printer-helper-macos
-          macos-executables/qsai-printer-helper.command
-          macos-executables/qsai-printer-helper-macos-app.zip
+          ubuntu-latest-builds/printer-helper-linux
+          windows-latest-builds/printer-helper-win.exe
+          macos-13-builds/printer-helper-macos
+          macos-13-builds/printer-helper.command
+          macos-13-builds/printer-helper-macos-app.zip
         body: |
-          ## 🎯 Multi-Format Printer Helper
+          ## Multi-Format Printer Helper
 
-          **macOS Users (choose one):**
-          - `qsai-printer-helper-macos-app.zip` - Native .app bundle (recommended)
-          - `qsai-printer-helper.command` - Double-click Terminal script 
-          - `qsai-printer-helper-macos` - Traditional binary
+          **macOS:**
+          - printer-helper-macos-app.zip (Native .app)
+          - printer-helper.command (Terminal script)
+          - printer-helper-macos (Binary)
 
-          **Other Platforms:**
-          - `qsai-printer-helper-win.exe` - Windows executable
-          - `qsai-printer-helper-linux` - Linux binary
-
-          All files are ready to run with double-click!
-        draft: false
-        prerelease: false
+          **Other:**
+          - printer-helper-win.exe (Windows)
+          - printer-helper-linux (Linux)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
