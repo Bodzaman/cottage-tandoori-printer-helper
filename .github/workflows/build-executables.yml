@@ -1,4 +1,5 @@
-name: Build Double-Clickable Epson Helper Executables
+name: Build Multi-Format Printer Helper
+
 on:
   push:
     branches: [ main ]
@@ -10,6 +11,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -20,138 +22,126 @@ jobs:
             target: node18-win-x64
             output: qsai-printer-helper-win.exe
             platform: windows
-          - os: macos-latest
+          - os: macos-14
             target: node18-macos-x64
             output: qsai-printer-helper-macos
             platform: macos
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Setup Node.js
+
+    - name: Setup Node.js 18
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
-        cache: 'npm'
-        
-    - name: Install dependencies with retry
+        node-version: '18.20.4'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Clear npm cache
+      run: npm cache clean --force
+
+    - name: Install dependencies
       run: |
-        for i in {1..3}; do
-          echo "Attempt $i to install dependencies..."
-          npm ci && break || sleep 30
-        done
-      shell: bash
-        
-    - name: Build executable with proper permissions
+        npm install --no-package-lock --legacy-peer-deps
+        npm install -g pkg@5.8.1
+
+    - name: Build executable
       run: |
-        echo "Building for ${{ matrix.platform }}..."
-        npx pkg server.js --targets ${{ matrix.target }} --out-path dist
-        
-        # Rename to proper filename
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          mv dist/server.exe dist/${{ matrix.output }}
-        else
-          mv dist/server dist/${{ matrix.output }}
-          # CRITICAL: Set executable permissions for Unix-like systems
-          chmod +x dist/${{ matrix.output }}
-          echo "Set executable permissions for ${{ matrix.output }}"
-        fi
-        
-        # Verify the file was created
-        ls -la dist/
-        file dist/${{ matrix.output }} || true
-      shell: bash
-      
-    - name: Test executable permissions (non-Windows)
+        mkdir -p dist
+        pkg server.js --targets ${{ matrix.target }} --output dist/${{ matrix.output }}
+
+    - name: Set executable permissions (Unix)
       if: matrix.platform != 'windows'
+      run: chmod +x dist/${{ matrix.output }}
+
+    - name: Create macOS multi-format (macOS only)
+      if: matrix.platform == 'macos'
       run: |
-        echo "Testing executable permissions..."
-        ls -la dist/${{ matrix.output }}
-        # Check if file has execute bit set
-        if test -x dist/${{ matrix.output }}; then
-          echo "Executable permissions set correctly"
-        else
-          echo "Missing executable permissions"
-          exit 1
-        fi
-      shell: bash
-      
-    - name: Upload artifacts with proper metadata
+        # Create .app bundle
+        mkdir -p "QSAIPrinterHelper.app/Contents/MacOS"
+        mkdir -p "QSAIPrinterHelper.app/Contents/Resources"
+
+        # Copy executable
+        cp dist/${{ matrix.output }} "QSAIPrinterHelper.app/Contents/MacOS/qsai-printer-helper"
+        chmod +x "QSAIPrinterHelper.app/Contents/MacOS/qsai-printer-helper"
+
+        # Create Info.plist
+        cat > "QSAIPrinterHelper.app/Contents/Info.plist" << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>qsai-printer-helper</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.cottagetandoori.printerhelper</string>
+            <key>CFBundleName</key>
+            <string>QSAI Printer Helper</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+        </dict>
+        </plist>
+        EOF
+
+        # Create .command script
+        cat > dist/qsai-printer-helper.command << 'EOF'
+        #!/bin/bash
+        echo "🖨️ Starting QSAI Printer Helper..."
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        "$SCRIPT_DIR/${{ matrix.output }}"
+        echo "Press any key to close..."
+        read -n 1
+        EOF
+        chmod +x dist/qsai-printer-helper.command
+
+        # Create ZIP of .app bundle
+        zip -r dist/qsai-printer-helper-macos-app.zip "QSAIPrinterHelper.app"
+
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: executable-${{ matrix.platform }}
-        path: dist/${{ matrix.output }}
-        retention-days: 90
-        
+        name: ${{ matrix.platform }}-executables
+        path: |
+          dist/${{ matrix.output }}
+          dist/qsai-printer-helper.command
+          dist/qsai-printer-helper-macos-app.zip
+        retention-days: 30
+
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
     - name: Download all artifacts
       uses: actions/download-artifact@v4
-      with:
-        path: ./artifacts
 
-    - name: Verify and set permissions for downloaded artifacts
-      run: |
-        echo "Downloaded artifacts:"
-        find ./artifacts -type f -exec ls -la {} \;
-        
-        # Ensure Unix executables maintain permissions
-        find ./artifacts -name "*linux*" -o -name "*macos*" | while read file; do
-          if [ -f "$file" ]; then
-            echo "Setting executable permissions for $file"
-            chmod +x "$file"
-            ls -la "$file"
-          fi
-        done
-
-    - name: Generate version tag
-      id: version
-      run: |
-        VERSION="v$(date +%Y%m%d-%H%M%S)-build${{ github.run_number }}"
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Generated version: $VERSION"
-        
-    - name: Create release with enhanced metadata
-      id: create_release
+    - name: Create or update release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ steps.version.outputs.version }}
-        name: "QSAI Epson Helper ${{ steps.version.outputs.version }}"
-        body: |
-          ## Double-Clickable Epson Printer Helper
-          
-          **Ready to use - Just download and double-click!**
-          
-          ### Downloads:
-          - **Windows**: `qsai-printer-helper-win.exe` (Double-click to run)
-          - **macOS**: `qsai-printer-helper-macos` (Double-click to run)
-          - **Linux**: `qsai-printer-helper-linux` (Double-click to run)
-          
-          ### Quick Start:
-          1. Download the file for your operating system
-          2. Double-click the downloaded file
-          3. Server will start on `localhost:3001`
-          4. Printers will be auto-discovered
-          
-          ### Technical Details:
-          - Supports Epson TM-T20III & TM-T88V
-          - Auto-connects to Cottage Tandoori Supabase
-          - Zero installation required
-          - Professional restaurant POS integration
-          
-          **Build**: #${{ github.run_number }} | **Commit**: ${{ github.sha }}
+        tag_name: v1.0.${{ github.run_number }}
+        name: "Multi-Format Helper v1.0.${{ github.run_number }}"
         files: |
-          ./artifacts/executable-windows/qsai-printer-helper-win.exe
-          ./artifacts/executable-macos/qsai-printer-helper-macos
-          ./artifacts/executable-linux/qsai-printer-helper-linux
+          linux-executables/qsai-printer-helper-linux
+          windows-executables/qsai-printer-helper-win.exe
+          macos-executables/qsai-printer-helper-macos
+          macos-executables/qsai-printer-helper.command
+          macos-executables/qsai-printer-helper-macos-app.zip
+        body: |
+          ## 🎯 Multi-Format Printer Helper
+
+          **macOS Users (choose one):**
+          - `qsai-printer-helper-macos-app.zip` - Native .app bundle (recommended)
+          - `qsai-printer-helper.command` - Double-click Terminal script 
+          - `qsai-printer-helper-macos` - Traditional binary
+
+          **Other Platforms:**
+          - `qsai-printer-helper-win.exe` - Windows executable
+          - `qsai-printer-helper-linux` - Linux binary
+
+          All files are ready to run with double-click!
         draft: false
         prerelease: false
       env:
