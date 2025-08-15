@@ -1,40 +1,23 @@
 {
   "name": "cottage-tandoori-printer-helper",
-  "version": "8.0.0",
-  "description": "Production-ready printer helper with embedded Node.js runtime",
+  "version": "8.0.1",
+  "description": "Minimal PKG build for restaurant printer helper",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "build": "pkg .",
-    "build:all": "npm run build:win && npm run build:mac && npm run build:linux",
-    "build:win": "pkg . --targets node18-win-x64 --output dist/cottage-tandoori-helper-windows.exe",
-    "build:mac": "pkg . --targets node18-macos-x64 --output dist/cottage-tandoori-helper-mac",
-    "build:linux": "pkg . --targets node18-linux-x64 --output dist/cottage-tandoori-helper-linux"
+    "start": "node server.js"
   },
-  "bin": "server.js",
+  "dependencies": {
+    "express": "4.18.2",
+    "cors": "2.8.5"
+  },
+  "devDependencies": {
+    "pkg": "5.8.1"
+  },
   "pkg": {
     "targets": [
       "node18-win-x64",
       "node18-macos-x64",
       "node18-linux-x64"
-    ],
-    "assets": [
-      "node_modules/**/*"
-    ],
-    "scripts": [
-      "server.js"
-    ],
-    "outputPath": "dist"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "body-parser": "^1.20.2"
-  },
-  "devDependencies": {
-    "pkg": "^5.8.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    ]
   }
 }
