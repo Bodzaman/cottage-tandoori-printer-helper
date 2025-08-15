@@ -4,10 +4,34 @@
   "description": "Lightweight printer helper for Cottage Tandoori POS system",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "pkg package.json --out-path dist/",
+    "build-win": "pkg package.json --target node18-win-x64 --out-path dist/",
+    "build-mac": "pkg package.json --target node18-macos-x64 --out-path dist/",
+    "build-linux": "pkg package.json --target node18-linux-x64 --out-path dist/",
+    "install-service": "node install-service.js"
+  },
+  "bin": "server.js",
+  "pkg": {
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64",
+      "node18-linux-x64"
+    ],
+    "outputPath": "dist"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5"
-  }
+    "cors": "^2.8.5",
+    "serialport": "^12.0.0",
+    "usb": "^2.11.0",
+    "node-windows": "^1.0.0-beta.8"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1",
+    "nodemon": "^3.0.1"
+  },
+  "author": "Cottage Tandoori",
+  "license": "MIT"
 }
