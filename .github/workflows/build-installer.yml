@@ -1,0 +1,112 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Copy Node.js executable
+        run: |
+          copy "C:\Program Files\nodejs\node.exe" "node.exe"
+
+      - name: Install NSIS
+        uses: joncloud/makensis-action@v4.1
+
+      - name: Create installer icon (placeholder)
+        run: |
+          echo "Creating placeholder icon..." > icon.ico
+
+      - name: Create LICENSE file
+        run: |
+          echo "MIT License" > LICENSE.txt
+          echo "" >> LICENSE.txt
+          echo "Copyright (c) 2024 Cottage Tandoori Restaurant" >> LICENSE.txt
+          echo "" >> LICENSE.txt
+          echo "Permission is hereby granted, free of charge, to any person obtaining a copy" >> LICENSE.txt
+          echo "of this software and associated documentation files (the \"Software\"), to deal" >> LICENSE.txt
+          echo "in the Software without restriction, including without limitation the rights" >> LICENSE.txt
+          echo "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell" >> LICENSE.txt
+          echo "copies of the Software, and to permit persons to whom the Software is" >> LICENSE.txt
+          echo "furnished to do so, subject to the following conditions:" >> LICENSE.txt
+          echo "" >> LICENSE.txt
+          echo "The above copyright notice and this permission notice shall be included in all" >> LICENSE.txt
+          echo "copies or substantial portions of the Software." >> LICENSE.txt
+          echo "" >> LICENSE.txt
+          echo "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR" >> LICENSE.txt
+          echo "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY," >> LICENSE.txt
+          echo "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE" >> LICENSE.txt
+          echo "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER" >> LICENSE.txt
+          echo "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM," >> LICENSE.txt
+          echo "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE" >> LICENSE.txt
+          echo "SOFTWARE." >> LICENSE.txt
+
+      - name: Build NSIS installer
+        run: makensis installer.nsi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name || github.event.inputs.version }}
+          release_name: Cottage Tandoori Printer Helper ${{ github.ref_name || github.event.inputs.version }}
+          body: |
+            ## Windows Auto-Startup Installer
+
+            ### Features:
+            - ✅ Professional Windows Service installation
+            - ✅ Auto-startup on system boot
+            - ✅ Runs on localhost:3001 for restaurant printing
+            - ✅ Clean uninstaller included
+            - ✅ Start Menu shortcuts
+
+            ### Installation:
+            1. Download `CottageTandooriPrinterHelper-Setup.exe`
+            2. Right-click and "Run as Administrator"
+            3. Follow installation wizard
+            4. Service starts automatically
+
+            ### Verification:
+            - Open http://localhost:3001/health in browser
+            - Should show service status as "healthy"
+
+            ### Restaurant Staff Instructions:
+            1. Download the installer
+            2. Double-click to install
+            3. Printing works immediately - no technical setup required!
+
+          draft: false
+          prerelease: false
+
+      - name: Upload Windows Installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./CottageTandooriPrinterHelper-Setup.exe
+          asset_name: CottageTandooriPrinterHelper-Setup.exe
+          asset_content_type: application/octet-stream
