@@ -1,112 +1,176 @@
-name: Build Multi-Format Helper
-
+name: Build Epson Helper Executables
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            ext: .exe
+          - os: macos-latest
+            platform: macos
+            ext: ""
+          - os: ubuntu-latest
+            platform: linux
+            ext: ""
+    
     steps:
-    - uses: actions/checkout@v4
-
-    - uses: actions/setup-node@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
-
-    - name: Install dependencies and pkg
+        cache: 'npm'
+        
+    - name: Install dependencies with retry
       run: |
-        npm install
-        npm install -g pkg@5.8.1
-
-    - name: Build all platforms
+        for i in {1..3}; do
+          npm ci && break || sleep 30
+        done
+      shell: bash
+        
+    - name: Install PKG globally with retry
       run: |
-        mkdir -p dist
-        # Build all platforms
-        pkg server.js --targets node18-linux-x64 --output dist/printer-helper-linux
-        pkg server.js --targets node18-win-x64 --output dist/printer-helper-win.exe
-        pkg server.js --targets node18-macos-x64 --output dist/printer-helper-macos
-
-        # Set permissions for Unix
-        chmod +x dist/printer-helper-linux
-        chmod +x dist/printer-helper-macos
-
-    - name: Create macOS extras
+        for i in {1..3}; do
+          npm install -g pkg && break || sleep 30
+        done
+      shell: bash
+        
+    - name: Build executable
       run: |
-        cd dist
-
-        # Create .app bundle structure
-        mkdir -p "PrinterHelper.app/Contents/MacOS"
-        cp printer-helper-macos "PrinterHelper.app/Contents/MacOS/printer-helper"
-        chmod +x "PrinterHelper.app/Contents/MacOS/printer-helper"
-
-        # Create Info.plist
-        cat > "PrinterHelper.app/Contents/Info.plist" << 'EOF'
-        <?xml version="1.0" encoding="UTF-8"?>
-        <plist version="1.0">
-        <dict>
-            <key>CFBundleExecutable</key>
-            <string>printer-helper</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.cottagetandoori.printerhelper</string>
-            <key>CFBundleName</key>
-            <string>Printer Helper</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleVersion</key>
-            <string>1.0.0</string>
-        </dict>
-        </plist>
-        EOF
-
-        # Create .command script
-        cat > printer-helper.command << 'SCRIPT'
-        #!/bin/bash
-        echo "🖨️ Starting Cottage Tandoori Printer Helper..."
-        echo "📍 Server will run on http://localhost:3001"
-        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-        "$DIR/printer-helper-macos"
-        echo ""
-        echo "Press Enter to close..."
-        read
-        SCRIPT
-        chmod +x printer-helper.command
-
-        # ZIP the .app bundle
-        zip -r printer-helper-macos-app.zip "PrinterHelper.app"
-
-        # List what we created
-        echo "📦 Created files:"
-        ls -la
-
-    - name: Create Release
+        npm run build:${{ matrix.platform }}
+      env:
+        NODE_OPTIONS: '--max-old-space-size=4096'
+        
+    - name: Verify build output
+      run: |
+        if [ "${{ matrix.platform }}" = "win" ]; then
+          ls -la qsai-printer-helper-win.exe
+        elif [ "${{ matrix.platform }}" = "macos" ]; then
+          ls -la qsai-printer-helper-macos
+        else
+          ls -la qsai-printer-helper-linux
+        fi
+      shell: bash
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: qsai-printer-helper-${{ matrix.platform }}
+        path: |
+          qsai-printer-helper-*${{ matrix.ext }}
+        retention-days: 30
+        
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        
+    - name: List artifacts
+      run: find ./artifacts -type f -name "*" | head -20
+      
+    - name: Create release with retry
+      id: create_release
+      run: |
+        VERSION="v$(date +%Y%m%d.%H%M%S)"
+        
+        # Create release with retry logic
+        for i in {1..5}; do
+          echo "Attempt $i to create release..."
+          
+          RESPONSE=$(curl -s -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{
+              \"tag_name\": \"$VERSION\",
+              \"name\": \"QSAI Epson Helper $VERSION\",
+              \"body\": \"Automated build of QSAI Epson printer helper with cross-platform executables\\n\\n- Windows: qsai-printer-helper-win.exe\\n- macOS: qsai-printer-helper-macos\\n- Linux: qsai-printer-helper-linux\",
+              \"draft\": false,
+              \"prerelease\": false
+            }" \
+            https://api.github.com/repos/${{ github.repository }}/releases)
+            
+          HTTP_CODE="${RESPONSE: -3}"
+          RESPONSE_BODY="${RESPONSE%???}"
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
+          
+          if [ "$HTTP_CODE" = "201" ]; then
+            echo "Release created successfully!"
+            echo "release_response=$RESPONSE_BODY" >> $GITHUB_OUTPUT
+            break
+          elif [ "$HTTP_CODE" = "403" ] && echo "$RESPONSE_BODY" | grep -q "rate limit"; then
+            echo "Rate limited, waiting 60 seconds..."
+            sleep 60
+          else
+            echo "Failed with code $HTTP_CODE, waiting 30 seconds..."
+            sleep 30
+          fi
+          
+          if [ $i -eq 5 ]; then
+            echo "Failed to create release after 5 attempts"
+            exit 1
+          fi
+        done
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload release assets with retry
       run: |
-        # Generate version tag
-        VERSION="v1.0.${{ github.run_number }}"
-        echo "Creating release: $VERSION"
-
-        # Create release using GitHub CLI (simpler than API)
-        gh release create "$VERSION" \
-          --title "Multi-Format Printer Helper $VERSION" \
-          --notes "## 🎯 Multi-Format Printer Helper
-
-        **macOS Users (choose one):**
-        - \`printer-helper-macos-app.zip\` - Native .app bundle (recommended)
-        - \`printer-helper.command\` - Double-click Terminal script 
-        - \`printer-helper-macos\` - Traditional binary
-
-        **Other Platforms:**
-        - \`printer-helper-win.exe\` - Windows executable
-        - \`printer-helper-linux\` - Linux binary
-
-        All files are ready to run with double-click!" \
-          dist/printer-helper-linux \
-          dist/printer-helper-win.exe \
-          dist/printer-helper-macos \
-          dist/printer-helper.command \
-          dist/printer-helper-macos-app.zip
-
-        echo "✅ Release created successfully!"
+        UPLOAD_URL=$(echo '${{ steps.create_release.outputs.release_response }}' | jq -r '.upload_url' | sed 's/{?name,label}//')
+        
+        # Upload each executable with retry
+        for artifact_dir in ./artifacts/*/; do
+          for file in "$artifact_dir"*; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              echo "Uploading $filename..."
+              
+              for i in {1..3}; do
+                RESPONSE=$(curl -s -w "%{http_code}" \
+                  -X POST \
+                  -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  -H "Content-Type: application/octet-stream" \
+                  --data-binary @"$file" \
+                  "$UPLOAD_URL?name=$filename")
+                  
+                HTTP_CODE="${RESPONSE: -3}"
+                
+                if [ "$HTTP_CODE" = "201" ]; then
+                  echo "$filename uploaded successfully!"
+                  break
+                else
+                  echo "Upload failed with code $HTTP_CODE, retrying in 30s..."
+                  sleep 30
+                fi
+                
+                if [ $i -eq 3 ]; then
+                  echo "Failed to upload $filename after 3 attempts"
+                fi
+              done
+            fi
+          done
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
