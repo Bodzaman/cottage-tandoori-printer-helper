@@ -2,13 +2,13 @@ const http = require('http');
 
 const options = {
     hostname: 'localhost',
-    port: 3001,
+    port: 8085,
     path: '/health',
     method: 'GET'
 };
 
-console.log('Testing Cottage Tandoori Printer Helper...');
-console.log(`Connecting to http://localhost:3001/health`);
+console.log('Testing PrinterHelperService...');
+console.log(`Connecting to http://localhost:8085/health`);
 
 const req = http.request(options, (res) => {
     console.log(`Status: ${res.statusCode}`);
