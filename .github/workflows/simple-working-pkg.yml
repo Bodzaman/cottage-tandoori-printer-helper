@@ -1,0 +1,68 @@
+name: Build Working PKG Executables
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'server.js'
+      - 'package.json'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build PKG executables
+      run: |
+        npx pkg server.js --targets node18-win-x64,node18-macos-x64,node18-linux-x64
+        ls -la
+        echo "Checking file sizes:"
+        ls -lh server-*
+
+    - name: Rename executables for restaurant use
+      run: |
+        mv server-win.exe cottage-tandoori-helper-windows.exe
+        mv server-macos cottage-tandoori-helper-mac
+        mv server-linux cottage-tandoori-helper-linux
+        echo "Final executables:"
+        ls -lh cottage-tandoori-helper-*
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v9.0.0
+        name: "Restaurant Production Helper v9.0.0 - Fixed PKG Build"
+        body: |
+          🎯 **FIXED: Proper PKG Executables with Embedded Node.js Runtime**
+
+          ✅ **These are 30-50MB standalone executables** - No Node.js installation required
+          ✅ **Includes MYA-258 auto-startup infrastructure** - Windows Service + macOS LaunchDaemon
+          ✅ **Restaurant production ready** - Optimized for QSAI printing on localhost:3001
+
+          **Download & Use:**
+          - **Windows**: cottage-tandoori-helper-windows.exe
+          - **macOS**: cottage-tandoori-helper-mac  
+          - **Linux**: cottage-tandoori-helper-linux
+
+          **Installation:**
+          1. Download appropriate version
+          2. Double-click to run (or use auto-startup installers from previous releases)
+          3. Helper runs on localhost:3001 for QSAI restaurant system
+        files: |
+          cottage-tandoori-helper-windows.exe
+          cottage-tandoori-helper-mac
+          cottage-tandoori-helper-linux
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
