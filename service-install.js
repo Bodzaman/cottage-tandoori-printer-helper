@@ -3,8 +3,8 @@ const path = require('path');
 
 // Create a new service object
 const svc = new Service({
-    name: 'Cottage Tandoori Printer Helper',
-    description: 'Auto-startup service for restaurant printing system',
+    name: 'PrinterHelperService',
+    description: 'Windows Service to support printer helper operations and installer creation',
     script: path.join(__dirname, 'server.js'),
     nodeOptions: [
         '--harmony',
@@ -17,7 +17,7 @@ const svc = new Service({
 // Listen for the "install" event, which indicates the
 // process is available as a service.
 svc.on('install', function() {
-    console.log('Cottage Tandoori Printer Helper installed successfully');
+    console.log('PrinterHelperService installed successfully');
     console.log('Starting service...');
     svc.start();
 });
@@ -25,21 +25,21 @@ svc.on('install', function() {
 // Listen for the "start" event and let us know when the
 // process has actually started working.
 svc.on('start', function() {
-    console.log('Cottage Tandoori Printer Helper started successfully');
-    console.log('Service is now running on port 3001');
+    console.log('PrinterHelperService started successfully');
+    console.log('Service is now running on port 8085');
 });
 
 // Listen for the "stop" event and let us know when the
 // process has actually stopped working.
 svc.on('stop', function() {
-    console.log('Cottage Tandoori Printer Helper stopped');
+    console.log('PrinterHelperService stopped');
 });
 
 // Listen for the "uninstall" event so we know when it's gone.
 svc.on('uninstall', function() {
-    console.log('Cottage Tandoori Printer Helper uninstalled');
+    console.log('PrinterHelperService uninstalled');
 });
 
 // Install the script as a service.
-console.log('Installing Cottage Tandoori Printer Helper...');
+console.log('Installing PrinterHelperService...');
 svc.install();
