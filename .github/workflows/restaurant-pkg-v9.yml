@@ -1,0 +1,70 @@
+name: Restaurant PKG Build v9.0.0
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build PKG executables
+      run: |
+        npx pkg --version
+        npx pkg . --targets node18-win-x64 --output cottage-tandoori-helper-windows.exe
+        npx pkg . --targets node18-macos-x64 --output cottage-tandoori-helper-mac
+        npx pkg . --targets node18-linux-x64 --output cottage-tandoori-helper-linux
+
+    - name: Verify executables
+      run: |
+        echo "Checking executable sizes:"
+        ls -la cottage-tandoori-helper-*
+        for file in cottage-tandoori-helper-*; do
+          size=$(stat -c%s "$file")
+          size_mb=$((size / 1024 / 1024))
+          echo "$file: ${size_mb}MB"
+          if [ $size -gt 25000000 ]; then
+            echo "✅ $file is proper size (${size_mb}MB)"
+          else
+            echo "❌ $file too small (${size_mb}MB)"
+            exit 1
+          fi
+        done
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v9.0.0
+        name: "🎯 Restaurant Production Helper v9.0.0 - WORKING PKG BUILD"
+        body: |
+          ✅ **FIXED: Proper PKG Executables with Embedded Node.js Runtime**
+
+          These are **30-50MB standalone executables** with embedded runtime:
+          - ✅ No Node.js installation required
+          - ✅ Includes MYA-258 auto-startup infrastructure  
+          - ✅ Restaurant production ready for localhost:3001
+
+          **Download & Use:**
+          - Windows: cottage-tandoori-helper-windows.exe
+          - macOS: cottage-tandoori-helper-mac
+          - Linux: cottage-tandoori-helper-linux
+
+          Double-click to run. For auto-startup, use service installers from previous releases.
+        files: |
+          cottage-tandoori-helper-windows.exe
+          cottage-tandoori-helper-mac
+          cottage-tandoori-helper-linux
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
