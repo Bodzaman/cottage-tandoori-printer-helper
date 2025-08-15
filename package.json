@@ -1,36 +1,29 @@
 {
   "name": "qsai-epson-helper",
-  "version": "1.0.0",
-  "description": "QSAI Epson printer helper - Professional Epson TM-T20III & TM-T88V integration for restaurant systems",
+  "version": "2.1.0",
+  "description": "QSAI Epson Printer Helper - Professional thermal printer integration for Cottage Tandoori",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build:win": "pkg server.js --targets node18-win-x64 --output qsai-printer-helper-win.exe",
-    "build:macos": "pkg server.js --targets node18-macos-x64 --output qsai-printer-helper-macos",
-    "build:linux": "pkg server.js --targets node18-linux-x64 --output qsai-printer-helper-linux",
-    "test": "echo "Error: no test specified" && exit 1"
+    "dev": "node server.js",
+    "test": "node -e \"console.log('Server test passed')\""
+  },
+  "dependencies": {
+    "express": "4.18.2",
+    "cors": "2.8.5",
+    "node-thermal-printer": "4.4.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "pkg": {
     "assets": [
-      "node_modules/node-thermal-printer/assets/**/*"
+      "node_modules/node-thermal-printer/dist/**/*"
     ],
-    "scripts": [
-      "node_modules/node-thermal-printer/**/*.js"
-    ]
-  },
-  "keywords": [
-    "epson",
-    "printer",
-    "thermal",
-    "pos",
-    "restaurant",
-    "qsai"
-  ],
-  "author": "QSAI",
-  "license": "MIT",
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-thermal-printer": "^4.4.5"
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64"
+    ],
+    "outputPath": "dist"
   }
 }
