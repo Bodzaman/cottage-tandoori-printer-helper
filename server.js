@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 
 const app = express();
-const PORT = 3001;
+const PORT = 8085;
 
 // Middleware
 app.use(cors());
@@ -15,7 +15,7 @@ app.use(express.json());
 app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
-        service: 'Cottage Tandoori Printer Helper',
+        service: 'PrinterHelperService',
         timestamp: new Date().toISOString(),
         port: PORT,
         platform: os.platform(),
@@ -50,17 +50,17 @@ app.post('/print', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`Cottage Tandoori Printer Helper running on port ${PORT}`);
+    console.log(`PrinterHelperService running on port ${PORT}`);
     console.log(`Service start time: ${new Date().toISOString()}`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('Cottage Tandoori Printer Helper received SIGTERM, shutting down gracefully');
+    console.log('PrinterHelperService received SIGTERM, shutting down gracefully');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('Cottage Tandoori Printer Helper received SIGINT, shutting down gracefully');
+    console.log('PrinterHelperService received SIGINT, shutting down gracefully');
     process.exit(0);
 });
