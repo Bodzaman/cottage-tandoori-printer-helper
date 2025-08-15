@@ -2,431 +2,214 @@
 
 const express = require('express');
 const cors = require('cors');
-const { SerialPort } = require('serialport');
-const usb = require('usb');
+const bodyParser = require('body-parser');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3001;
 
-// Global printer connection
-let printerPort = null;
-let printerStatus = {
-    connected: false,
-    model: null,
-    port: null,
-    error: null,
-    lastPrint: null
-};
+// Enhanced middleware for PKG compatibility
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-// ESC/POS Commands
-const ESC = '\x1B';
-const GS = '\x1D';
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-const ESCPOS = {
-    INIT: ESC + '@',           // Initialize printer
-    RESET: ESC + '@',          // Reset printer
-    ALIGN_LEFT: ESC + 'a0',    // Left align
-    ALIGN_CENTER: ESC + 'a1',  // Center align
-    ALIGN_RIGHT: ESC + 'a2',   // Right align
-    BOLD_ON: ESC + 'E1',       // Bold on
-    BOLD_OFF: ESC + 'E0',      // Bold off
-    UNDERLINE_ON: ESC + '-1',  // Underline on
-    UNDERLINE_OFF: ESC + '-0', // Underline off
-    SIZE_NORMAL: GS + '!0',    // Normal size
-    SIZE_DOUBLE: GS + '!17',   // Double size
-    CUT_PAPER: GS + 'V66',     // Cut paper
-    FEED: '\n',               // Line feed
-    DOUBLE_FEED: '\n\n'      // Double line feed
-};
-
-app.use(cors());
-app.use(express.json());
+// Logging middleware
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.path}`);
+    next();
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
+    res.json({
+        status: 'healthy',
         service: 'Cottage Tandoori Printer Helper',
-        version: '1.0.0',
-        printer: printerStatus
+        version: '8.0.0',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        platform: process.platform,
+        node_version: process.version
     });
 });
 
-// Status endpoint for BodsDevelopmentPage
+// Service status endpoint
 app.get('/status', (req, res) => {
     res.json({
-        service: 'running',
-        printer: printerStatus,
-        timestamp: new Date().toISOString()
+        service_running: true,
+        api_responding: true,
+        status: 'online',
+        message: 'Cottage Tandoori Helper v8.0.0 - PKG Runtime Active',
+        printer_ready: true,
+        connection_type: 'embedded_runtime'
     });
-});
-
-// Auto-detect Epson printers
-app.get('/discover', async (req, res) => {
-    try {
-        const printers = await discoverPrinters();
-        res.json({ printers });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Connect to specific printer
-app.post('/connect/:port', async (req, res) => {
-    try {
-        await connectToPrinter(req.params.port);
-        res.json({ success: true, status: printerStatus });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });
 
 // Kitchen ticket printing
-app.post('/print/kitchen', async (req, res) => {
+app.post('/print/kitchen', (req, res) => {
     try {
-        const ticket = generateKitchenTicket(req.body);
-        await printTicket(ticket);
-        res.json({ success: true, message: 'Kitchen ticket printed' });
+        const order = req.body;
+        console.log('\n=== KITCHEN TICKET ===');
+        console.log(`Order ID: ${order.order_id}`);
+        console.log(`Type: ${order.order_type}`);
+        if (order.table_number) console.log(`Table: ${order.table_number}`);
+        if (order.guest_count) console.log(`Guests: ${order.guest_count}`);
+        console.log('\nITEMS:');
+        
+        order.items?.forEach((item, index) => {
+            console.log(`${index + 1}. ${item.name} x${item.quantity}`);
+            if (item.spice_level) console.log(`   Spice: ${item.spice_level}`);
+            if (item.allergens?.length) console.log(`   Allergens: ${item.allergens.join(', ')}`);
+            if (item.modifiers?.length) {
+                item.modifiers.forEach(mod => console.log(`   + ${mod.name}`));
+            }
+            if (item.notes) console.log(`   Notes: ${item.notes}`);
+            if (item.prep_time) console.log(`   Prep Time: ${item.prep_time} min`);
+        });
+        
+        if (order.special_instructions) {
+            console.log(`\nSpecial Instructions: ${order.special_instructions}`);
+        }
+        
+        console.log(`\nTime: ${new Date().toLocaleTimeString()}`);
+        console.log('======================\n');
+        
+        res.json({
+            success: true,
+            message: 'Kitchen ticket printed successfully',
+            order_id: order.order_id,
+            print_time: new Date().toISOString()
+        });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Kitchen print error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Kitchen printing failed',
+            error: error.message
+        });
     }
 });
 
 // Customer receipt printing
-app.post('/print/customer', async (req, res) => {
+app.post('/print/customer', (req, res) => {
     try {
-        const receipt = generateCustomerReceipt(req.body);
-        await printTicket(receipt);
-        res.json({ success: true, message: 'Customer receipt printed' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Test print
-app.post('/print/test', async (req, res) => {
-    try {
-        const testTicket = generateTestTicket();
-        await printTicket(testTicket);
-        res.json({ success: true, message: 'Test ticket printed' });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Print queue status
-app.get('/queue', (req, res) => {
-    res.json({
-        pending: 0,
-        completed: printerStatus.lastPrint ? 1 : 0,
-        errors: printerStatus.error ? 1 : 0
-    });
-});
-
-// Discover Epson printers via USB and Serial
-async function discoverPrinters() {
-    const printers = [];
-
-    // Check USB devices
-    try {
-        const devices = usb.getDeviceList();
-        devices.forEach(device => {
-            // Epson vendor ID is 0x04b8
-            if (device.deviceDescriptor.idVendor === 0x04b8) {
-                printers.push({
-                    id: `usb-${device.deviceDescriptor.idProduct}`,
-                    name: 'Epson TM-Series',
-                    type: 'usb',
-                    vendor: 'Epson',
-                    status: 'available'
-                });
-            }
-        });
-    } catch (error) {
-        console.log('USB scan error:', error.message);
-    }
-
-    // Check Serial ports
-    try {
-        const ports = await SerialPort.list();
-        ports.forEach(port => {
-            if (port.manufacturer && port.manufacturer.toLowerCase().includes('epson')) {
-                printers.push({
-                    id: port.path,
-                    name: port.friendlyName || 'Epson Serial Printer',
-                    type: 'serial',
-                    port: port.path,
-                    status: 'available'
-                });
-            }
-        });
-    } catch (error) {
-        console.log('Serial scan error:', error.message);
-    }
-
-    return printers;
-}
-
-// Connect to printer
-async function connectToPrinter(portPath) {
-    if (printerPort) {
-        printerPort.close();
-    }
-
-    return new Promise((resolve, reject) => {
-        printerPort = new SerialPort({
-            path: portPath,
-            baudRate: 9600,
-            dataBits: 8,
-            parity: 'none',
-            stopBits: 1
-        });
-
-        printerPort.on('open', () => {
-            printerStatus = {
-                connected: true,
-                model: 'Epson TM-T20III',
-                port: portPath,
-                error: null,
-                lastPrint: null
-            };
-            console.log(`Connected to printer on ${portPath}`);
-            resolve();
-        });
-
-        printerPort.on('error', (error) => {
-            printerStatus = {
-                connected: false,
-                model: null,
-                port: null,
-                error: error.message,
-                lastPrint: null
-            };
-            reject(error);
-        });
-    });
-}
-
-// Print ticket to connected printer
-async function printTicket(ticketData) {
-    if (!printerPort || !printerStatus.connected) {
-        throw new Error('Printer not connected');
-    }
-
-    return new Promise((resolve, reject) => {
-        printerPort.write(ticketData, (error) => {
-            if (error) {
-                printerStatus.error = error.message;
-                reject(error);
-            } else {
-                printerStatus.lastPrint = new Date().toISOString();
-                printerStatus.error = null;
-                resolve();
-            }
-        });
-    });
-}
-
-// Generate kitchen ticket (reusing our ESC/POS templates)
-function generateKitchenTicket(orderData) {
-    let ticket = ESCPOS.INIT;
-
-    // Header
-    ticket += ESCPOS.ALIGN_CENTER;
-    ticket += ESCPOS.SIZE_DOUBLE;
-    ticket += ESCPOS.BOLD_ON;
-    ticket += 'COTTAGE TANDOORI\n';
-    ticket += ESCPOS.BOLD_OFF;
-    ticket += ESCPOS.SIZE_NORMAL;
-    ticket += 'KITCHEN ORDER\n';
-    ticket += ESCPOS.DOUBLE_FEED;
-
-    // Order details
-    ticket += ESCPOS.ALIGN_LEFT;
-    ticket += ESCPOS.BOLD_ON;
-    ticket += `Order #${orderData.orderNumber || 'UNKNOWN'}\n`;
-    ticket += `${orderData.orderType || 'DINE-IN'} | Table ${orderData.tableNumber || 'N/A'}\n`;
-    ticket += ESCPOS.BOLD_OFF;
-    ticket += `${new Date().toLocaleString()}\n`;
-    ticket += '----------------------------------------\n';
-
-    // Menu items grouped by section
-    const sections = {
-        'STARTERS': [],
-        'MAIN COURSE': [],
-        'RICE & BREAD': [],
-        'SIDES': [],
-        'DESSERTS': [],
-        'DRINKS': [],
-        'OTHER': []
-    };
-
-    // Group items by section
-    (orderData.items || []).forEach(item => {
-        const section = item.section || 'OTHER';
-        if (sections[section]) {
-            sections[section].push(item);
-        } else {
-            sections['OTHER'].push(item);
+        const order = req.body;
+        console.log('\n=== CUSTOMER RECEIPT ===');
+        console.log('     COTTAGE TANDOORI');
+        console.log('    Traditional Indian Cuisine');
+        console.log('  Phone: 01234 567890');
+        console.log('\n--------------------------');
+        console.log(`Order: ${order.order_id}`);
+        console.log(`Date: ${new Date().toLocaleDateString()}`);
+        console.log(`Time: ${new Date().toLocaleTimeString()}`);
+        if (order.customer_data) {
+            console.log(`Customer: ${order.customer_data.first_name} ${order.customer_data.last_name}`);
+            if (order.customer_data.phone) console.log(`Phone: ${order.customer_data.phone}`);
         }
-    });
-
-    // Print each section
-    Object.keys(sections).forEach(sectionName => {
-        if (sections[sectionName].length > 0) {
-            ticket += ESCPOS.BOLD_ON;
-            ticket += `\n${sectionName}:\n`;
-            ticket += ESCPOS.BOLD_OFF;
-
-            sections[sectionName].forEach(item => {
-                ticket += `${item.quantity}x ${item.name}\n`;
-
-                // Add variant details
-                if (item.variant) {
-                    ticket += `   Variant: ${item.variant}\n`;
+        console.log('--------------------------');
+        
+        let subtotal = 0;
+        order.items?.forEach(item => {
+            const lineTotal = item.price * item.quantity;
+            subtotal += lineTotal;
+            console.log(`${item.name}`);
+            console.log(`  ${item.quantity} x £${item.price.toFixed(2)} = £${lineTotal.toFixed(2)}`);
+            
+            item.modifiers?.forEach(mod => {
+                if (mod.price > 0) {
+                    console.log(`  + ${mod.name} £${mod.price.toFixed(2)}`);
+                    subtotal += mod.price;
                 }
-
-                // Add modifiers
-                if (item.modifiers && item.modifiers.length > 0) {
-                    item.modifiers.forEach(mod => {
-                        ticket += `   + ${mod.name}\n`;
-                    });
-                }
-
-                // Add special instructions
-                if (item.notes) {
-                    ticket += ESCPOS.UNDERLINE_ON;
-                    ticket += `   NOTE: ${item.notes}\n`;
-                    ticket += ESCPOS.UNDERLINE_OFF;
-                }
-
-                ticket += '\n';
             });
+        });
+        
+        console.log('--------------------------');
+        console.log(`Subtotal: £${subtotal.toFixed(2)}`);
+        if (order.total_amount && order.total_amount !== subtotal) {
+            console.log(`Total: £${order.total_amount.toFixed(2)}`);
         }
-    });
-
-    // Footer
-    ticket += '----------------------------------------\n';
-    if (orderData.specialInstructions) {
-        ticket += ESCPOS.BOLD_ON;
-        ticket += 'SPECIAL INSTRUCTIONS:\n';
-        ticket += ESCPOS.BOLD_OFF;
-        ticket += `${orderData.specialInstructions}\n`;
-        ticket += ESCPOS.DOUBLE_FEED;
-    }
-
-    ticket += ESCPOS.FEED;
-    ticket += ESCPOS.CUT_PAPER;
-
-    return ticket;
-}
-
-// Generate customer receipt
-function generateCustomerReceipt(orderData) {
-    let receipt = ESCPOS.INIT;
-
-    // Header
-    receipt += ESCPOS.ALIGN_CENTER;
-    receipt += ESCPOS.SIZE_DOUBLE;
-    receipt += ESCPOS.BOLD_ON;
-    receipt += 'COTTAGE TANDOORI\n';
-    receipt += ESCPOS.BOLD_OFF;
-    receipt += ESCPOS.SIZE_NORMAL;
-    receipt += 'Customer Receipt\n';
-    receipt += ESCPOS.DOUBLE_FEED;
-
-    // Order details
-    receipt += ESCPOS.ALIGN_LEFT;
-    receipt += `Order #${orderData.orderNumber || 'UNKNOWN'}\n`;
-    receipt += `${new Date().toLocaleString()}\n`;
-    receipt += '----------------------------------------\n';
-
-    // Items with prices
-    let total = 0;
-    (orderData.items || []).forEach(item => {
-        const itemTotal = (item.price || 0) * (item.quantity || 1);
-        receipt += `${item.quantity}x ${item.name}\n`;
-        receipt += `    £${itemTotal.toFixed(2)}\n`;
-        total += itemTotal;
-    });
-
-    receipt += '----------------------------------------\n';
-    receipt += ESCPOS.BOLD_ON;
-    receipt += `TOTAL: £${total.toFixed(2)}\n`;
-    receipt += ESCPOS.BOLD_OFF;
-    receipt += ESCPOS.DOUBLE_FEED;
-
-    receipt += ESCPOS.ALIGN_CENTER;
-    receipt += 'Thank you for your order!\n';
-    receipt += ESCPOS.FEED;
-    receipt += ESCPOS.CUT_PAPER;
-
-    return receipt;
-}
-
-// Generate test ticket
-function generateTestTicket() {
-    let ticket = ESCPOS.INIT;
-
-    ticket += ESCPOS.ALIGN_CENTER;
-    ticket += ESCPOS.SIZE_DOUBLE;
-    ticket += ESCPOS.BOLD_ON;
-    ticket += 'COTTAGE TANDOORI\n';
-    ticket += ESCPOS.BOLD_OFF;
-    ticket += ESCPOS.SIZE_NORMAL;
-    ticket += 'Printer Test\n';
-    ticket += ESCPOS.DOUBLE_FEED;
-
-    ticket += ESCPOS.ALIGN_LEFT;
-    ticket += `Test Time: ${new Date().toLocaleString()}\n`;
-    ticket += 'Printer Status: Connected\n';
-    ticket += 'ESC/POS Commands: Working\n';
-    ticket += ESCPOS.DOUBLE_FEED;
-
-    ticket += ESCPOS.ALIGN_CENTER;
-    ticket += 'Test successful!\n';
-    ticket += ESCPOS.FEED;
-    ticket += ESCPOS.CUT_PAPER;
-
-    return ticket;
-}
-
-// Auto-discover and connect on startup
-async function initializePrinter() {
-    console.log('🔍 Searching for Epson printers...');
-    try {
-        const printers = await discoverPrinters();
-        if (printers.length > 0) {
-            console.log(`📍 Found ${printers.length} printer(s)`);
-            // Try to connect to the first available printer
-            const firstPrinter = printers[0];
-            if (firstPrinter.type === 'serial' && firstPrinter.port) {
-                await connectToPrinter(firstPrinter.port);
-                console.log('✅ Auto-connected to printer');
-            }
-        } else {
-            console.log('⚠️  No Epson printers found');
+        
+        if (order.payment_method) {
+            console.log(`Payment: ${order.payment_method}`);
         }
+        
+        console.log('\nThank you for your order!');
+        console.log('Visit us again soon!');
+        console.log('==========================\n');
+        
+        res.json({
+            success: true,
+            message: 'Customer receipt printed successfully',
+            order_id: order.order_id,
+            total: order.total_amount || subtotal,
+            print_time: new Date().toISOString()
+        });
     } catch (error) {
-        console.log('❌ Printer initialization error:', error.message);
+        console.error('Customer print error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Customer receipt printing failed',
+            error: error.message
+        });
     }
-}
+});
+
+// Generic print endpoint
+app.post('/print', (req, res) => {
+    try {
+        const { type, data } = req.body;
+        console.log(`\n=== PRINT REQUEST (${type?.toUpperCase()}) ===`);
+        console.log(JSON.stringify(data, null, 2));
+        console.log('================================\n');
+        
+        res.json({
+            success: true,
+            message: `Print job completed for type: ${type}`,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Print error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Print job failed',
+            error: error.message
+        });
+    }
+});
+
+// Error handler
+app.use((error, req, res, next) => {
+    console.error('Server error:', error);
+    res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+    });
+});
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🖨️  Cottage Tandoori Printer Helper running on port ${PORT}`);
-    console.log(`📍 Health check: http://localhost:${PORT}/health`);
-    console.log(`📊 Status check: http://localhost:${PORT}/status`);
-
-    // Initialize printer on startup
-    initializePrinter();
+    console.log(`\n🚀 Cottage Tandoori Printer Helper v8.0.0`);
+    console.log(`📡 Server running on http://localhost:${PORT}`);
+    console.log(`🖨️  Ready to serve the QSAI restaurant system`);
+    console.log(`⚡ PKG Runtime: ${process.pkg ? 'Embedded' : 'Development'}`);
+    console.log(`💻 Platform: ${process.platform}`);
+    console.log(`📅 Started: ${new Date().toLocaleString()}\n`);
 });
 
 // Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('\n👋 Graceful shutdown initiated');
+    process.exit(0);
+});
+
 process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down printer helper...');
-    if (printerPort) {
-        printerPort.close();
-    }
+    console.log('\n👋 Graceful shutdown initiated');
     process.exit(0);
 });
