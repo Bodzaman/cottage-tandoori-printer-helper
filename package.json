@@ -1,29 +1,45 @@
 {
-  "name": "qsai-epson-helper",
-  "version": "2.1.0",
-  "description": "QSAI Epson Printer Helper - Professional thermal printer integration for Cottage Tandoori",
+  "name": "qsai-printer-helper",
+  "version": "7.0.0",
+  "description": "QSAI Printer Helper with Auto-Startup Service Support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "node -e \"console.log('Server test passed')\""
-  },
-  "dependencies": {
-    "express": "4.18.2",
-    "cors": "2.8.5",
-    "node-thermal-printer": "4.4.4"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "build-win": "pkg . --targets node18-win-x64 --output qsai-printer-helper-win.exe",
+    "build-macos": "pkg . --targets node18-macos-x64 --output qsai-printer-helper-macos",
+    "build-linux": "pkg . --targets node18-linux-x64 --output qsai-printer-helper-linux",
+    "install-windows-service": "node service-manager.js install",
+    "uninstall-windows-service": "node service-manager.js uninstall",
+    "start-service": "node service-manager.js start",
+    "stop-service": "node service-manager.js stop"
   },
   "pkg": {
     "assets": [
-      "node_modules/node-thermal-printer/dist/**/*"
+      "node_modules/usb/**/*",
+      "node_modules/node-hid/**/*",
+      "service-manager.js",
+      "install-windows-service.bat",
+      "install-macos-service.sh",
+      "com.qsai.printer.helper.plist"
     ],
     "targets": [
       "node18-win-x64",
-      "node18-macos-x64"
-    ],
-    "outputPath": "dist"
+      "node18-macos-x64",
+      "node18-linux-x64"
+    ]
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "escpos": "^3.0.0-alpha.6",
+    "usb": "^2.9.0",
+    "node-hid": "^2.1.2",
+    "node-windows": "^1.0.0-beta.8"
+  },
+  "author": "QSAI Restaurant Systems",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bodzaman/cottage-tandoori-printer-helper.git"
   }
 }
