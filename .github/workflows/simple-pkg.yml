@@ -1,0 +1,36 @@
+name: Simple PKG Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        npm install
+        npm install -g pkg@5.8.1
+
+    - name: Build executables
+      run: |
+        mkdir -p dist
+        pkg . --targets node18-win-x64 --output dist/cottage-tandoori-helper-windows.exe
+        pkg . --targets node18-macos-x64 --output dist/cottage-tandoori-helper-mac
+        pkg . --targets node18-linux-x64 --output dist/cottage-tandoori-helper-linux
+        ls -la dist/
+
+    - name: Show file sizes
+      run: |
+        for file in dist/*; do
+          size=$(stat -c%s "$file" 2>/dev/null)
+          size_mb=$((size / 1024 / 1024))
+          echo "$file: ${size_mb}MB"
+        done
