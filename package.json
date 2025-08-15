@@ -1,45 +1,40 @@
 {
-  "name": "qsai-printer-helper",
-  "version": "7.0.0",
-  "description": "QSAI Printer Helper with Auto-Startup Service Support",
+  "name": "cottage-tandoori-printer-helper",
+  "version": "8.0.0",
+  "description": "Production-ready printer helper with embedded Node.js runtime",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build-win": "pkg . --targets node18-win-x64 --output qsai-printer-helper-win.exe",
-    "build-macos": "pkg . --targets node18-macos-x64 --output qsai-printer-helper-macos",
-    "build-linux": "pkg . --targets node18-linux-x64 --output qsai-printer-helper-linux",
-    "install-windows-service": "node service-manager.js install",
-    "uninstall-windows-service": "node service-manager.js uninstall",
-    "start-service": "node service-manager.js start",
-    "stop-service": "node service-manager.js stop"
+    "build": "pkg .",
+    "build:all": "npm run build:win && npm run build:mac && npm run build:linux",
+    "build:win": "pkg . --targets node18-win-x64 --output dist/cottage-tandoori-helper-windows.exe",
+    "build:mac": "pkg . --targets node18-macos-x64 --output dist/cottage-tandoori-helper-mac",
+    "build:linux": "pkg . --targets node18-linux-x64 --output dist/cottage-tandoori-helper-linux"
   },
+  "bin": "server.js",
   "pkg": {
-    "assets": [
-      "node_modules/usb/**/*",
-      "node_modules/node-hid/**/*",
-      "service-manager.js",
-      "install-windows-service.bat",
-      "install-macos-service.sh",
-      "com.qsai.printer.helper.plist"
-    ],
     "targets": [
       "node18-win-x64",
       "node18-macos-x64",
       "node18-linux-x64"
-    ]
+    ],
+    "assets": [
+      "node_modules/**/*"
+    ],
+    "scripts": [
+      "server.js"
+    ],
+    "outputPath": "dist"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "escpos": "^3.0.0-alpha.6",
-    "usb": "^2.9.0",
-    "node-hid": "^2.1.2",
-    "node-windows": "^1.0.0-beta.8"
+    "body-parser": "^1.20.2"
   },
-  "author": "QSAI Restaurant Systems",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Bodzaman/cottage-tandoori-printer-helper.git"
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
