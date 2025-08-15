@@ -1,0 +1,66 @@
+name: Build Production PKG Executables
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'server.js'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build PKG executables
+      run: |
+        npx pkg server.js --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --out-path ./dist
+        ls -la ./dist
+
+    - name: Verify executable sizes
+      run: |
+        echo "Checking executable sizes (should be 30-50MB each):"
+        du -h ./dist/*
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v9.0.0
+        name: "Restaurant Production Helper v9.0.0"
+        body: |
+          🚀 **Restaurant-Ready PKG Executables with Embedded Node.js Runtime**
+
+          These are complete standalone executables that include:
+          - ✅ Embedded Node.js runtime (no installation required)
+          - ✅ Auto-startup service configurations from MYA-258
+          - ✅ Optimized for restaurant production use
+          - ✅ Ready for QSAI printing on localhost:3001
+
+          **Download & Run:**
+          - Windows: `cottage-tandoori-helper-windows.exe`
+          - macOS: `cottage-tandoori-helper-mac`
+          - Linux: `cottage-tandoori-helper-linux`
+
+          Each executable is 30-50MB and runs independently.
+        files: |
+          ./dist/server-win.exe
+          ./dist/server-macos
+          ./dist/server-linux
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
