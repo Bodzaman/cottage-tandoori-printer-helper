@@ -1,0 +1,36 @@
+name: Minimal PKG Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Test PKG
+      run: |
+        npx pkg --version
+        npx pkg . --targets node18-linux-x64 --output test-executable
+
+    - name: Verify result
+      run: |
+        ls -la test-executable
+        size=$(stat -c%s test-executable)
+        echo "File size: $size bytes"
+        if [ $size -gt 5000000 ]; then
+          echo "✅ Success - executable is $(($size / 1024 / 1024))MB"
+        else
+          echo "❌ Failed - executable too small"
+          exit 1
+        fi
