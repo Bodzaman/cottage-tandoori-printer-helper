@@ -1,0 +1,64 @@
+name: Build Windows Executable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Install PKG globally
+      run: npm install -g pkg
+
+    - name: Build Windows executable
+      run: pkg . --targets node18-win-x64 --output cottage-tandoori-printer-helper-windows.exe
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v6.2.0-build-${{ github.run_number }}
+        release_name: Windows Printer Helper v6.2.0 (Build ${{ github.run_number }})
+        body: |
+          🖨️ **Windows Printer Helper Ready!**
+
+          **Download**: cottage-tandoori-printer-helper-windows.exe
+
+          **Installation**:
+          1. Download the .exe file
+          2. Run as Administrator
+          3. Helper starts automatically on localhost:3001
+
+          **Features**:
+          - Auto-startup service
+          - Print test pages
+          - Order receipt printing
+          - Cross-origin support for web apps
+        draft: false
+        prerelease: false
+
+    - name: Upload Windows Executable
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./cottage-tandoori-printer-helper-windows.exe
+        asset_name: cottage-tandoori-printer-helper-windows.exe
+        asset_content_type: application/octet-stream
