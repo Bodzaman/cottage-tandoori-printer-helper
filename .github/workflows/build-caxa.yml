@@ -1,0 +1,91 @@
+name: Build Windows Executable with CAXA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Clean install dependencies
+      run: npm ci
+
+    - name: Install CAXA globally
+      run: npm install -g caxa@latest
+
+    - name: Build Windows executable with CAXA
+      run: |
+        caxa --input . --output cottage-tandoori-printer-helper-windows.exe --command "{{caxa}}/node_modules/.bin/node" "{{caxa}}/server.js"
+
+    - name: Verify executable was created
+      run: |
+        if (Test-Path "cottage-tandoori-printer-helper-windows.exe") {
+          Write-Host "✅ Executable created successfully!"
+          $size = (Get-Item "cottage-tandoori-printer-helper-windows.exe").Length / 1MB
+          Write-Host "📦 Size: $([math]::Round($size, 2)) MB"
+        } else {
+          Write-Host "❌ Executable not found!"
+          exit 1
+        }
+      shell: powershell
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v6.3.0-${{ github.run_number }}
+        release_name: "Windows Printer Helper v6.3.0 (CAXA Build ${{ github.run_number }})"
+        body: |
+          🖨️ **Windows Printer Helper - CAXA Build**
+
+          **✅ Built with modern CAXA (PKG replacement)**
+
+          **📥 Download**: `cottage-tandoori-printer-helper-windows.exe`
+
+          **🚀 Installation**:
+          1. Download the .exe file
+          2. Run as Administrator  
+          3. Helper starts on localhost:3001
+          4. Ready for POS system integration
+
+          **🔧 Features**:
+          - Thermal printer support
+          - Order receipt printing  
+          - Test print functionality
+          - CORS enabled for web apps
+          - Auto-startup service
+
+          **🛠️ Tech**: Node.js + Express + CAXA
+        draft: false
+        prerelease: false
+
+    - name: Upload Windows Executable
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./cottage-tandoori-printer-helper-windows.exe
+        asset_name: cottage-tandoori-printer-helper-windows.exe
+        asset_content_type: application/octet-stream
+
+    - name: Success notification
+      run: |
+        Write-Host "🎉 Build completed successfully!"
+        Write-Host "🔗 Release: https://github.com/${{ github.repository }}/releases/latest"
+        Write-Host "📥 Direct download: https://github.com/${{ github.repository }}/releases/download/v6.3.0-${{ github.run_number }}/cottage-tandoori-printer-helper-windows.exe"
+      shell: powershell
