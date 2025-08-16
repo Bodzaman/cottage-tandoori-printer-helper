@@ -1,23 +1,31 @@
 {
   "name": "cottage-tandoori-printer-helper",
-  "version": "6.1.0",
-  "description": "Complete printer helper for Cottage Tandoori POS system with all required endpoints",
+  "version": "6.2.0",
+  "description": "Windows Printer Helper for Cottage Tandoori Restaurant",
   "main": "server.js",
+  "bin": {
+    "cottage-tandoori-printer-helper": "./server.js"
+  },
+  "pkg": {
+    "targets": [
+      "node18-win-x64"
+    ],
+    "assets": [
+      "node_modules/**/*"
+    ],
+    "outputPath": "dist"
+  },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "build": "pkg . --out-path dist",
+    "build-win": "pkg . --targets node18-win-x64 --output dist/cottage-tandoori-printer-helper-windows.exe"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.0"
   },
-  "keywords": [
-    "printer",
-    "pos",
-    "restaurant",
-    "epson",
-    "thermal-printer"
-  ],
-  "author": "Cottage Tandoori",
-  "license": "MIT"
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
 }
