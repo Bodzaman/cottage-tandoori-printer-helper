@@ -1,25 +1,23 @@
 {
   "name": "cottage-tandoori-printer-helper",
-  "version": "1.0.0",
-  "description": "Windows Auto-Startup Service for Cottage Tandoori Restaurant Printing",
+  "version": "6.1.0",
+  "description": "Complete printer helper for Cottage Tandoori POS system with all required endpoints",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "install-service": "node service-install.js",
-    "uninstall-service": "node service-uninstall.js",
-    "test": "node test-service.js"
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-windows": "^1.0.0-beta.8"
+    "cors": "^2.8.5"
   },
   "keywords": [
+    "printer",
+    "pos",
     "restaurant",
-    "printing",
-    "windows-service",
-    "auto-startup"
+    "epson",
+    "thermal-printer"
   ],
-  "author": "Cottage Tandoori Restaurant",
+  "author": "Cottage Tandoori",
   "license": "MIT"
 }
