@@ -5,22 +5,24 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build-windows": "caxa --input . --output cottage-tandoori-printer-helper-windows.exe --command \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/server.js\""
+    "build": "caxa --input . --output cottage-tandoori-printer-helper-windows.exe --command \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/server.js\""
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "body-parser": "^1.20.0"
+    "express": "4.18.2",
+    "cors": "2.8.5",
+    "body-parser": "1.20.2"
   },
   "devDependencies": {
-    "caxa": "^3.0.1"
+    "caxa": "3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [
     "printer",
     "pos",
     "restaurant",
-    "epson",
-    "thermal-printer"
+    "epson"
   ],
   "author": "Cottage Tandoori",
   "license": "MIT"
